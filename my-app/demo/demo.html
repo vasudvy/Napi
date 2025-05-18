@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Napier AI Widget Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <h1>Napier AI Widget Demo</h1>
+    <p>Embed AI-powered voice assistants in any web application</p>
+  </header>
+  
+  
+  <footer>
+    <p>&copy; 2025 Napier AI Widget | All Rights Reserved</p>
+  </footer>
+  
+  <!-- Include the Napier Widget script -->
+  <script src="../widget/napier-widget.js"></script>
+  
+  <script>
+    // Initialize the widget with default settings
+    let widget;
+    
+    function initWidget() {
+      // Get form values
+      const clientId = document.getElementById('client-id').value || 'demo-client-123';
+      const theme = document.getElementById('theme').value;
+      const position = document.getElementById('position').value;
+      const size = document.getElementById('size').value;
+      
+      // Clear previous widget if it exists
+      const container = document.getElementById('widget-container');
+      container.innerHTML = '';
+      
+      // Initialize new widget
+      widget = new NapierWidget({
+        container: '#widget-container',
+        napierClientId: clientId,
+        proxyUrl: 'http://localhost:3000', // Replace with your actual proxy server URL
+        theme,
+        position,
+        size
+      });
+    }
+    
+    // Initialize widget on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      initWidget();
+      
+      // Apply settings button event listener
+      document.getElementById('apply-settings').addEventListener('click', initWidget);
+    });
+  </script>
+</body>
+</html>
