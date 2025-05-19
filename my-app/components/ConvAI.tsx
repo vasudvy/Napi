@@ -3,7 +3,8 @@
 import { useConversation } from '@11labs/react';
 import { Mic } from 'lucide-react-native';
 import { useCallback } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet, Text } from 'react-native';
+import { Platform } from 'react-native';
 
 import tools from '../utils/tools';
 
@@ -30,6 +31,8 @@ export default function ConvAiDOMComponent({
   change_brightness: typeof tools.change_brightness;
   flash_screen: typeof tools.flash_screen;
 }) {
+  const isWeb = Platform.OS === 'web';
+
   const conversation = useConversation({
     onConnect: () => console.log('Connected'),
     onDisconnect: () => console.log('Disconnected'),
@@ -38,6 +41,7 @@ export default function ConvAiDOMComponent({
     },
     onError: (error) => console.error('Error:', error),
   });
+  
   const startConversation = useCallback(async () => {
     try {
       // Request microphone permission
@@ -47,41 +51,64 @@ export default function ConvAiDOMComponent({
         return;
       }
 
+      // Prepare client tools based on platform
+      const clientTools = {
+        get_battery_level,
+        change_brightness,
+        flash_screen,
+      };
+
+      // Add browser tools if on web platform
+      if (isWeb) {
+        Object.assign(clientTools, {
+          open_new_tab: tools.open_new_tab,
+          click_element: tools.click_element,
+          type_text: tools.type_text,
+          get_current_url: tools.get_current_url,
+          scroll_to: tools.scroll_to,
+          get_element_text: tools.get_element_text,
+        });
+      }
+
       // Start the conversation with your agent
       await conversation.startSession({
         agentId: 'agent_01jvg9443reddrc38gye4jhfvr', // Replace with your agent ID
         dynamicVariables: {
           platform,
+          isWeb,
         },
-        clientTools: {
-          get_battery_level,
-          change_brightness,
-          flash_screen,
-        },
+        clientTools,
       });
     } catch (error) {
       console.error('Failed to start conversation:', error);
     }
-  }, [conversation]);
+  }, [conversation, isWeb]);
 
   const stopConversation = useCallback(async () => {
     await conversation.endSession();
   }, [conversation]);
 
   return (
-    <Pressable
-      style={[styles.callButton, conversation.status === 'connected' && styles.callButtonActive]}
-      onPress={conversation.status === 'disconnected' ? startConversation : stopConversation}
-    >
-      <View
-        style={[
-          styles.buttonInner,
-          conversation.status === 'connected' && styles.buttonInnerActive,
-        ]}
+    <View>
+      <Pressable
+        style={[styles.callButton, conversation.status === 'connected' && styles.callButtonActive]}
+        onPress={conversation.status === 'disconnected' ? startConversation : stopConversation}
       >
-        <Mic size={32} color="#E2E8F0" strokeWidth={1.5} style={styles.buttonIcon} />
-      </View>
-    </Pressable>
+        <View
+          style={[
+            styles.buttonInner,
+            conversation.status === 'connected' && styles.buttonInnerActive,
+          ]}
+        >
+          <Mic size={32} color="#E2E8F0" strokeWidth={1.5} style={styles.buttonIcon} />
+        </View>
+      </Pressable>
+      {isWeb && (
+        <Text style={styles.webLabel}>
+          Web DOM Tools Enabled
+        </Text>
+      )}
+    </View>
   );
 }
 
@@ -93,7 +120,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 8,
   },
   callButtonActive: {
     backgroundColor: 'rgba(239, 68, 68, 0.2)',
@@ -120,5 +147,12 @@ const styles = StyleSheet.create({
   },
   buttonIcon: {
     transform: [{ translateY: 2 }],
+  },
+  webLabel: {
+    color: '#4ADE80',
+    fontSize: 12,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    marginBottom: 16,
   },
 });

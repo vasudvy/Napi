@@ -7,6 +7,8 @@ import ConvAiDOMComponent from './components/ConvAI';
 import tools from './utils/tools';
 
 export default function App() {
+  const isWeb = Platform.OS === 'web';
+  
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient colors={['#0F172A', '#1E293B']} style={StyleSheet.absoluteFill} />
@@ -18,6 +20,9 @@ export default function App() {
 
         <View style={styles.toolsList}>
           <Text style={styles.toolsTitle}>Available Client Tools:</Text>
+          
+          {/* Device tools */}
+          <Text style={styles.toolsSubtitle}>Device Tools:</Text>
           <View style={styles.toolItem}>
             <Text style={styles.toolText}>Get battery level</Text>
             <View style={styles.platformTags}>
@@ -40,7 +45,51 @@ export default function App() {
               <Text style={styles.platformTag}>android</Text>
             </View>
           </View>
+          
+          {/* Web browser tools */}
+          {isWeb && (
+            <>
+              <Text style={[styles.toolsSubtitle, styles.webToolsHeader]}>Browser Tools:</Text>
+              <View style={styles.toolItem}>
+                <Text style={styles.toolText}>Open new tab</Text>
+                <View style={styles.platformTags}>
+                  <Text style={styles.webPlatformTag}>web</Text>
+                </View>
+              </View>
+              <View style={styles.toolItem}>
+                <Text style={styles.toolText}>Click element</Text>
+                <View style={styles.platformTags}>
+                  <Text style={styles.webPlatformTag}>web</Text>
+                </View>
+              </View>
+              <View style={styles.toolItem}>
+                <Text style={styles.toolText}>Type text</Text>
+                <View style={styles.platformTags}>
+                  <Text style={styles.webPlatformTag}>web</Text>
+                </View>
+              </View>
+              <View style={styles.toolItem}>
+                <Text style={styles.toolText}>Get current URL</Text>
+                <View style={styles.platformTags}>
+                  <Text style={styles.webPlatformTag}>web</Text>
+                </View>
+              </View>
+              <View style={styles.toolItem}>
+                <Text style={styles.toolText}>Scroll to position</Text>
+                <View style={styles.platformTags}>
+                  <Text style={styles.webPlatformTag}>web</Text>
+                </View>
+              </View>
+              <View style={styles.toolItem}>
+                <Text style={styles.toolText}>Get element text</Text>
+                <View style={styles.platformTags}>
+                  <Text style={styles.webPlatformTag}>web</Text>
+                </View>
+              </View>
+            </>
+          )}
         </View>
+        
         <View style={styles.domComponentContainer}>
           <ConvAiDOMComponent
             dom={{ style: styles.domComponent }}
@@ -88,6 +137,17 @@ const styles = StyleSheet.create({
     color: '#E2E8F0',
     marginBottom: 16,
   },
+  toolsSubtitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: '#94A3B8',
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  webToolsHeader: {
+    marginTop: 16,
+    color: '#4ADE80',
+  },
   toolItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -115,15 +175,25 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     fontFamily: 'Inter-Regular',
   },
+  webPlatformTag: {
+    fontSize: 12,
+    color: '#4ADE80',
+    backgroundColor: 'rgba(74, 222, 128, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    overflow: 'hidden',
+    fontFamily: 'Inter-Regular',
+  },
   domComponentContainer: {
     width: 120,
-    height: 120,
+    height: 150, // Increased to accommodate the label
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
   },
   domComponent: {
     width: 120,
-    height: 120,
+    height: 150,
   },
 });
