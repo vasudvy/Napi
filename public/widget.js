@@ -54,28 +54,23 @@
       this.isActive = false;
       this.mediaRecorder = null;
       this.audioChunks = [];
+      this.proxyUrl = 'https://your-netlify-app.com/voice-chat';
     }
 
     async startSession() {
       try {
-        const response = await fetch('https://your-app.com/voice-chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            action: 'start',
-            agentId: this.config.agentId,
-            apiKey: this.config.apiKey,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to start session');
-        }
-
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this.mediaRecorder = new MediaRecorder(stream);
+        
+        this.mediaRecorder.ondataavailable = async (event) => {
+          if (event.data.size > 0) {
+            this.audioChunks.push(event.data);
+            await this.sendAudioChunk();
+          }
+        };
+        
+        this.mediaRecorder.start(1000);
         this.isActive = true;
-        await this.startRecording();
         
         if (this.config.onConnect) {
           this.config.onConnect();
@@ -88,90 +83,48 @@
       }
     }
 
-    async endSession() {
+    async sendAudioChunk() {
+      const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append('audio', audioBlob);
+      
       try {
-        await fetch('https://your-app.com/voice-chat', {
+        const response = await fetch(this.proxyUrl, {
           method: 'POST',
+          body: formData,
           headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            action: 'end',
-            agentId: this.config.agentId,
-            apiKey: this.config.apiKey,
-          }),
-        });
-
-        this.isActive = false;
-        this.stopRecording();
-        
-        if (this.config.onDisconnect) {
-          this.config.onDisconnect();
-        }
-      } catch (error) {
-        console.error('Failed to end session:', error);
-        if (this.config.onError) {
-          this.config.onError(error);
-        }
-      }
-    }
-
-    async startRecording() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        this.mediaRecorder = new MediaRecorder(stream);
-        
-        this.mediaRecorder.ondataavailable = async (event) => {
-          if (event.data.size > 0) {
-            this.audioChunks.push(event.data);
-            
-            // Send audio chunk to server
-            const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-            const formData = new FormData();
-            formData.append('audio', audioBlob);
-            
-            try {
-              const response = await fetch('https://your-app.com/voice-chat', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                  'X-Agent-ID': this.config.agentId,
-                  'X-API-Key': this.config.apiKey,
-                },
-              });
-              
-              if (!response.ok) {
-                throw new Error('Failed to send audio');
-              }
-              
-              const data = await response.json();
-              if (this.config.onMessage) {
-                this.config.onMessage(data);
-              }
-            } catch (error) {
-              console.error('Failed to send audio:', error);
-              if (this.config.onError) {
-                this.config.onError(error);
-              }
-            }
-            
-            this.audioChunks = [];
+            'X-API-Key': this.config.apiKey
           }
-        };
+        });
         
-        this.mediaRecorder.start(1000);
+        if (!response.ok) {
+          throw new Error('Failed to send audio');
+        }
+        
+        const data = await response.json();
+        if (this.config.onMessage) {
+          this.config.onMessage(data);
+        }
       } catch (error) {
-        console.error('Failed to start recording:', error);
+        console.error('Failed to send audio:', error);
         if (this.config.onError) {
           this.config.onError(error);
         }
       }
+      
+      this.audioChunks = [];
     }
 
-    stopRecording() {
-      if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+    async endSession() {
+      if (this.mediaRecorder) {
         this.mediaRecorder.stop();
         this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      }
+      
+      this.isActive = false;
+      
+      if (this.config.onDisconnect) {
+        this.config.onDisconnect();
       }
     }
   }
@@ -180,14 +133,12 @@
   function initWidget() {
     const script = document.currentScript;
     const apiKey = script.getAttribute('data-api-key');
-    const agentId = script.getAttribute('data-agent-id');
     
-    if (!apiKey || !agentId) {
-      console.error('Napier AI Widget: Missing required attributes (data-api-key, data-agent-id)');
+    if (!apiKey) {
+      console.error('Napier AI Widget: Missing required attribute (data-api-key)');
       return;
     }
 
-    // Create widget UI
     createWidgetStyles();
     
     const container = document.createElement('div');
@@ -204,10 +155,8 @@
     container.appendChild(button);
     document.body.appendChild(container);
     
-    // Initialize voice chat
     const voiceChat = new NapierVoiceChat({
       apiKey,
-      agentId,
       onConnect: () => {
         button.classList.add('napier-call-button-active');
         buttonInner.classList.add('napier-button-inner-active');
@@ -216,9 +165,6 @@
         button.classList.remove('napier-call-button-active');
         buttonInner.classList.remove('napier-button-inner-active');
       },
-      onMessage: (message) => {
-        console.log('Message received:', message);
-      },
       onError: (error) => {
         console.error('Voice chat error:', error);
         button.classList.remove('napier-call-button-active');
@@ -226,7 +172,6 @@
       }
     });
     
-    // Handle button click
     button.addEventListener('click', async () => {
       if (!voiceChat.isActive) {
         await voiceChat.startSession();
@@ -236,7 +181,6 @@
     });
   }
 
-  // Initialize when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initWidget);
   } else {

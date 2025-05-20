@@ -3,15 +3,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.39.8';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
 };
-
-interface RequestBody {
-  agentId: string;
-  apiKey: string;
-  action: 'start' | 'message' | 'end';
-  payload?: any;
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -19,82 +12,66 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const startTime = Date.now();
+    const apiKey = req.headers.get('X-API-Key');
+
+    if (!apiKey) {
+      throw new Error('API key is required');
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { agentId, apiKey, action, payload } = await req.json() as RequestBody;
-
-    // Validate API key and get user
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('id, eleven_labs_key')
-      .eq('api_key', apiKey)
+    // Validate API key
+    const { data: keyData, error: keyError } = await supabase
+      .from('api_keys')
+      .select('id, user_id')
+      .eq('key', apiKey)
+      .eq('is_active', true)
       .single();
 
-    if (userError || !userData) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid API key' }),
-        { 
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
+    if (keyError || !keyData) {
+      throw new Error('Invalid API key');
     }
 
-    // Get agent configuration
-    const { data: agentData, error: agentError } = await supabase
-      .from('agents')
-      .select(`
-        id,
-        name,
-        system_prompt,
-        eleven_labs_agent_id,
-        agent_tools (
-          name,
-          description,
-          parameters
-        )
-      `)
-      .eq('id', agentId)
-      .eq('user_id', userData.id)
-      .single();
+    // Forward request to ElevenLabs
+    const elevenLabsResponse = await fetch('https://api.elevenlabs.io/v1/text-to-speech', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': Deno.env.get('ELEVENLABS_API_KEY') ?? '',
+      },
+      body: req.body,
+    });
 
-    if (agentError || !agentData) {
-      return new Response(
-        JSON.stringify({ error: 'Agent not found' }),
-        { 
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
+    const responseTime = Date.now() - startTime;
 
-    // Forward request to ElevenLabs with proper configuration
-    const elevenLabsResponse = await fetch(
-      `https://api.elevenlabs.io/v1/voice-chat/${action}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userData.eleven_labs_key}`,
-        },
-        body: JSON.stringify({
-          agentId: agentData.eleven_labs_agent_id,
-          ...payload,
-          systemPrompt: agentData.system_prompt,
-          tools: agentData.agent_tools,
-        }),
-      }
-    );
+    // Log usage
+    await supabase.from('usage_logs').insert({
+      api_key_id: keyData.id,
+      request_type: 'text-to-speech',
+      status: elevenLabsResponse.status.toString(),
+      response_time: responseTime
+    });
 
-    const elevenLabsData = await elevenLabsResponse.json();
+    // Update API key usage
+    await supabase.from('api_keys')
+      .update({ 
+        last_used_at: new Date().toISOString(),
+        calls_count: keyData.calls_count + 1
+      })
+      .eq('id', keyData.id);
 
     return new Response(
-      JSON.stringify(elevenLabsData),
+      await elevenLabsResponse.blob(),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: elevenLabsResponse.status,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': elevenLabsResponse.headers.get('Content-Type') ?? 'application/json'
+        }
       }
     );
   } catch (error) {
